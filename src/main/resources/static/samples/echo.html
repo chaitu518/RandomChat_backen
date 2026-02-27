@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Echo WebSocket Sample</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .row { margin-bottom: 12px; }
+        #log { border: 1px solid #ccc; padding: 10px; height: 220px; overflow: auto; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+<h2>Echo WebSocket Sample</h2>
+
+<div class="row">
+    <button id="connectBtn">Connect</button>
+    <button id="disconnectBtn" disabled>Disconnect</button>
+</div>
+
+<div class="row">
+    <input id="messageInput" type="text" placeholder="Type a message" size="40">
+    <button id="sendBtn" disabled>Send</button>
+</div>
+
+<div class="row">
+    <div><strong>Status:</strong> <span id="status">disconnected</span></div>
+</div>
+
+<pre id="log"></pre>
+
+<script src="https://unpkg.com/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+<script>
+    const statusEl = document.getElementById("status");
+    const logEl = document.getElementById("log");
+    const connectBtn = document.getElementById("connectBtn");
+    const disconnectBtn = document.getElementById("disconnectBtn");
+    const sendBtn = document.getElementById("sendBtn");
+    const messageInput = document.getElementById("messageInput");
+
+    let client = null;
+
+    function log(message) {
+        logEl.textContent += message + "\n";
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function setConnected(connected) {
+        statusEl.textContent = connected ? "connected" : "disconnected";
+        connectBtn.disabled = connected;
+        disconnectBtn.disabled = !connected;
+        sendBtn.disabled = !connected;
+    }
+
+    connectBtn.addEventListener("click", () => {
+        client = new StompJs.Client({
+            brokerURL: "ws://localhost:8080/ws",
+            reconnectDelay: 0
+        });
+
+        client.onConnect = () => {
+            setConnected(true);
+            log("CONNECTED");
+            client.subscribe("/topic/echo", (msg) => {
+                const payload = JSON.parse(msg.body);
+                log("ECHO: " + payload.message);
+            });
+        };
+
+        client.onWebSocketClose = () => {
+            setConnected(false);
+            log("DISCONNECTED");
+        };
+
+        client.onStompError = (frame) => {
+            log("ERROR: " + frame.body);
+        };
+
+        client.activate();
+    });
+
+    disconnectBtn.addEventListener("click", () => {
+        if (client) {
+            client.deactivate();
+        }
+    });
+
+    sendBtn.addEventListener("click", () => {
+        if (!client) return;
+        const text = messageInput.value.trim();
+        if (!text) return;
+        client.publish({
+            destination: "/app/echo",
+            body: JSON.stringify({ message: text })
+        });
+        messageInput.value = "";
+    });
+</script>
+</body>
+</html>

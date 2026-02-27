@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>RandomChat WebSocket Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .row { margin-bottom: 12px; }
+        label { margin-right: 8px; }
+        input, select, button { margin-right: 8px; }
+        #log { border: 1px solid #ccc; padding: 10px; height: 260px; overflow: auto; white-space: pre-wrap; }
+        #chat { border: 1px solid #ccc; padding: 10px; height: 260px; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+        .bubble { max-width: 70%; padding: 6px 10px; border-radius: 12px; font-size: 14px; word-wrap: break-word; }
+        .bubble.me { align-self: flex-end; background: #d9f7be; }
+        .bubble.other { align-self: flex-start; background: #f0f0f0; }
+        .bubble.system { align-self: center; background: #fff3cd; }
+        .meta { font-size: 11px; color: #666; margin-bottom: 2px; }
+    </style>
+</head>
+<body>
+<h2>RandomChat WebSocket Test</h2>
+
+<div class="row">
+    <label>Gender</label>
+    <select id="gender">
+        <option value="MALE">MALE</option>
+        <option value="FEMALE">FEMALE</option>
+    </select>
+    <label>Preference</label>
+    <select id="preference">
+        <option value="MALE">MALE</option>
+        <option value="FEMALE">FEMALE</option>
+        <option value="BOTH" selected>BOTH</option>
+    </select>
+</div>
+
+<div class="row">
+    <button id="connectBtn">Connect</button>
+    <button id="disconnectBtn" disabled>Disconnect</button>
+    <button id="joinBtn" disabled>Join</button>
+    <button id="nextBtn" disabled>Next</button>
+</div>
+
+<div class="row">
+    <label>Message</label>
+    <input id="messageInput" type="text" placeholder="Say hi" size="40">
+    <button id="sendBtn" disabled>Send</button>
+</div>
+
+<div class="row">
+    <div><strong>Status:</strong> <span id="status">disconnected</span></div>
+    <div><strong>Session:</strong> <span id="sessionId">-</span></div>
+    <div><strong>Room:</strong> <span id="roomId">-</span></div>
+    <div><strong>Anon:</strong> <span id="anonId">-</span></div>
+</div>
+
+<div id="chat"></div>
+<div id="log"></div>
+
+<script src="https://unpkg.com/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+<script>
+    const statusEl = document.getElementById("status");
+    const sessionEl = document.getElementById("sessionId");
+    const roomEl = document.getElementById("roomId");
+    const anonEl = document.getElementById("anonId");
+    const logEl = document.getElementById("log");
+    const chatEl = document.getElementById("chat");
+    const connectBtn = document.getElementById("connectBtn");
+    const disconnectBtn = document.getElementById("disconnectBtn");
+    const joinBtn = document.getElementById("joinBtn");
+    const nextBtn = document.getElementById("nextBtn");
+    const sendBtn = document.getElementById("sendBtn");
+
+    let client = null;
+    let sessionId = null;
+    let roomId = null;
+    let roomSub = null;
+    let helloSub = null;
+    let clientId = null;
+    let anonId = null;
+
+    function log(message) {
+        logEl.textContent += message + "\n";
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function appendChat(text, type, sender) {
+        const bubble = document.createElement("div");
+        bubble.className = `bubble ${type}`;
+        if (sender) {
+            const meta = document.createElement("div");
+            meta.className = "meta";
+            meta.textContent = sender;
+            bubble.appendChild(meta);
+        }
+        bubble.appendChild(document.createTextNode(text));
+        chatEl.appendChild(bubble);
+        chatEl.scrollTop = chatEl.scrollHeight;
+    }
+
+    function setConnected(connected) {
+        statusEl.textContent = connected ? "connected" : "disconnected";
+        connectBtn.disabled = connected;
+        disconnectBtn.disabled = !connected;
+        joinBtn.disabled = !connected;
+        nextBtn.disabled = !connected;
+        sendBtn.disabled = !connected;
+    }
+
+    function resetRoom() {
+        roomId = null;
+        roomEl.textContent = "-";
+        chatEl.textContent = "";
+        if (roomSub) {
+            roomSub.unsubscribe();
+            roomSub = null;
+        }
+    }
+
+    connectBtn.addEventListener("click", () => {
+        clientId = `client-${Math.random().toString(36).slice(2)}`;
+        client = new StompJs.Client({
+            brokerURL: "ws://localhost:8080/ws",
+            reconnectDelay: 0
+        });
+
+        client.onConnect = () => {
+            setConnected(true);
+            log("CONNECTED");
+
+            helloSub = client.subscribe(`/topic/hello`, (msg) => {
+                const payload = JSON.parse(msg.body);
+                if (payload.clientId !== clientId) {
+                    return;
+                }
+                sessionId = payload.sessionId;
+                sessionEl.textContent = sessionId || "(unknown)";
+
+                client.subscribe(`/topic/match/${sessionId}`, (matchMsg) => {
+                    const matchPayload = JSON.parse(matchMsg.body);
+                    log(`MATCH: ${matchMsg.body}`);
+                    if (matchPayload.type === "MATCHED") {
+                        roomId = matchPayload.roomId;
+                        roomEl.textContent = roomId;
+                        if (!roomSub) {
+                            roomSub = client.subscribe(`/topic/room/${roomId}`, (roomMsg) => {
+                                const roomPayload = JSON.parse(roomMsg.body);
+                                if (roomPayload.senderId) {
+                                    const side = roomPayload.senderId === anonId ? "me" : "other";
+                                    appendChat(roomPayload.message, side, roomPayload.senderId);
+                                } else if (roomPayload.type && roomPayload.message) {
+                                    appendChat(roomPayload.message, "system", roomPayload.type);
+                                } else {
+                                    appendChat(roomMsg.body, "system");
+                                }
+                            });
+                        }
+                    }
+                    if (matchPayload.type === "PARTNER_LEFT") {
+                        appendChat("Partner left the chat.", "system", "SYSTEM");
+                        resetRoom();
+                    }
+                });
+
+                client.subscribe(`/topic/system/${sessionId}`, (systemMsg) => {
+                    log(`SYSTEM: ${systemMsg.body}`);
+                    const systemPayload = JSON.parse(systemMsg.body);
+                    if (systemPayload.type === "IDENTITY") {
+                        anonId = systemPayload.message;
+                        anonEl.textContent = anonId;
+                    }
+                });
+
+                if (helloSub) {
+                    helloSub.unsubscribe();
+                    helloSub = null;
+                }
+            });
+
+            client.publish({
+                destination: "/app/hello",
+                body: JSON.stringify({ clientId })
+            });
+        };
+
+        client.onWebSocketClose = () => {
+            setConnected(false);
+            resetRoom();
+            sessionId = null;
+            sessionEl.textContent = "-";
+            log("DISCONNECTED");
+        };
+
+        client.onStompError = (frame) => {
+            log(`ERROR: ${frame.body}`);
+        };
+
+        client.activate();
+    });
+
+    disconnectBtn.addEventListener("click", () => {
+        if (client) {
+            client.deactivate();
+        }
+    });
+
+    joinBtn.addEventListener("click", () => {
+        if (!client) return;
+        const gender = document.getElementById("gender").value;
+        const preference = document.getElementById("preference").value;
+        client.publish({
+            destination: "/app/join",
+            body: JSON.stringify({ gender, preference })
+        });
+        log(`JOIN: ${gender}/${preference}`);
+    });
+
+    nextBtn.addEventListener("click", () => {
+        if (!client) return;
+        resetRoom();
+        client.publish({ destination: "/app/next" });
+        log("NEXT");
+    });
+
+    sendBtn.addEventListener("click", () => {
+        if (!client || !roomId) {
+            log("No active room.");
+            return;
+        }
+        const text = document.getElementById("messageInput").value.trim();
+        if (!text) return;
+        client.publish({
+            destination: "/app/message",
+            body: JSON.stringify({ roomId, message: text })
+        });
+        document.getElementById("messageInput").value = "";
+    });
+</script>
+</body>
+</html>
