@@ -1,7 +1,7 @@
 package com.srt.randomchat.service;
 
 import com.srt.randomchat.model.Gender;
-import com.srt.randomchat.model.MatchResult;
+import com.srt.randomchat.model.MatchOutcome;
 import com.srt.randomchat.model.Preference;
 import org.junit.jupiter.api.Test;
 
@@ -18,10 +18,11 @@ class MatchServiceTest {
         service.register("b", Gender.FEMALE, Preference.MALE);
 
         assertTrue(service.requestMatch("a").isEmpty());
-        MatchResult result = service.requestMatch("b").orElse(null);
+        MatchOutcome outcome = service.requestMatch("b").orElse(null);
 
-        assertNotNull(result);
-        assertTrue(result.roomId().length() > 0);
+        assertNotNull(outcome);
+        assertNotNull(outcome.matchResult());
+        assertTrue(outcome.matchResult().roomId().length() > 0);
     }
 
     @Test

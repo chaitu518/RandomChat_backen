@@ -142,19 +142,25 @@
                     if (matchPayload.type === "MATCHED") {
                         roomId = matchPayload.roomId;
                         roomEl.textContent = roomId;
-                        if (!roomSub) {
-                            roomSub = client.subscribe(`/topic/room/${roomId}`, (roomMsg) => {
-                                const roomPayload = JSON.parse(roomMsg.body);
-                                if (roomPayload.senderId) {
-                                    const side = roomPayload.senderId === anonId ? "me" : "other";
-                                    appendChat(roomPayload.message, side, roomPayload.senderId);
-                                } else if (roomPayload.type && roomPayload.message) {
-                                    appendChat(roomPayload.message, "system", roomPayload.type);
-                                } else {
-                                    appendChat(roomMsg.body, "system");
-                                }
-                            });
+                        if (roomSub) {
+                            roomSub.unsubscribe();
+                            roomSub = null;
                         }
+                        roomSub = client.subscribe(`/topic/room/${roomId}`, (roomMsg) => {
+                            const roomPayload = JSON.parse(roomMsg.body);
+                            if (roomPayload.senderId) {
+                                const side = roomPayload.senderId === anonId ? "me" : "other";
+                                appendChat(roomPayload.message, side, roomPayload.senderId);
+                            } else if (roomPayload.type && roomPayload.message) {
+                                if (roomPayload.type === "TYPING") {
+                                    appendChat(roomPayload.message, "system", "TYPING");
+                                } else {
+                                    appendChat(roomPayload.message, "system", roomPayload.type);
+                                }
+                            } else {
+                                appendChat(roomMsg.body, "system");
+                            }
+                        });
                     }
                     if (matchPayload.type === "PARTNER_LEFT") {
                         appendChat("Partner left the chat.", "system", "SYSTEM");
