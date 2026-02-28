@@ -5,7 +5,6 @@ import org.springframework.stereotype.Service;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
@@ -17,7 +16,6 @@ public class BotService {
     private final PromptBuilder promptBuilder;
     private final ConcurrentHashMap<String, AtomicInteger> noQuestionTurns = new ConcurrentHashMap<>();
     private final java.util.concurrent.atomic.AtomicLong unavailableUntilMs = new java.util.concurrent.atomic.AtomicLong(0);
-    private final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicBoolean> firstReplySent = new java.util.concurrent.ConcurrentHashMap<>();
 
     public BotService(BotProperties properties,
                       OllamaClient ollamaClient,
@@ -93,7 +91,6 @@ public class BotService {
         memoryManager.append(sessionId, "bot", reply);
         updateQuestionCounter(sessionId, reply);
 
-        applyTypingDelay(sessionId, reply);
         return CompletableFuture.completedFuture(reply);
     }
 
@@ -122,20 +119,6 @@ public class BotService {
         }
         int count = noQuestionTurns.computeIfAbsent(sessionId, id -> new AtomicInteger(0)).get();
         return count >= properties.getMaxNoQuestionTurns();
-    }
-
-    private void applyTypingDelay(String sessionId, String reply) {
-        boolean isFirst = !firstReplySent.computeIfAbsent(sessionId, id -> new AtomicBoolean(false)).getAndSet(true);
-        int length = reply == null ? 0 : reply.length();
-        long delayMs = 800L + (long) length * 15L;
-        if (isFirst && delayMs < 20_000L) {
-            delayMs = 20_000L;
-        }
-        try {
-            Thread.sleep(delayMs);
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-        }
     }
 
     private void updateQuestionCounter(String sessionId, String reply) {
