@@ -15,6 +15,7 @@ import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
 
 @Controller
 public class ChatController {
@@ -28,6 +29,7 @@ public class ChatController {
         this.messagingTemplate = messagingTemplate;
         this.botService = botService;
     }
+
 
     @MessageMapping("/hello")
     public void hello(HelloRequest request, SimpMessageHeaderAccessor headerAccessor) {
@@ -163,5 +165,10 @@ public class ChatController {
                 "/topic/system/" + sessionId,
                 new SystemEvent("ERROR", "Bot unavailable. Searching for a partner...")
         );
+    }
+
+    @GetMapping("/ai-test")
+    public String testAI() {
+        return botService.generate("Say hello casually");
     }
 }

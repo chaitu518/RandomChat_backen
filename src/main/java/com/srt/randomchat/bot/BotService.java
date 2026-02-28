@@ -41,6 +41,11 @@ public class BotService {
         return "anon-bot";
     }
 
+    public String generate(String prompt) {
+        String reply = ollamaClient.generate(prompt);
+        return reply == null ? "(no reply)" : reply;
+    }
+
     @Async("botExecutor")
     public CompletableFuture<String> generateReply(String sessionId, String userMessage) {
         if (!properties.isEnabled()) {
