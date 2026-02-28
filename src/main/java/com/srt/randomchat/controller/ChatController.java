@@ -167,8 +167,4 @@ public class ChatController {
         );
     }
 
-    @GetMapping("/ai-test")
-    public String testAI() {
-        return botService.generate("Say hello casually");
-    }
 }
