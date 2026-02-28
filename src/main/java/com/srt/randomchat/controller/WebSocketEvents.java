@@ -1,6 +1,5 @@
 package com.srt.randomchat.controller;
 
-import com.srt.randomchat.bot.BotService;
 import com.srt.randomchat.dto.MatchEvent;
 import com.srt.randomchat.dto.SystemEvent;
 import com.srt.randomchat.model.MatchOutcome;
@@ -16,12 +15,10 @@ public class WebSocketEvents {
 
     private final MatchService matchService;
     private final SimpMessagingTemplate messagingTemplate;
-    private final BotService botService;
 
-    public WebSocketEvents(MatchService matchService, SimpMessagingTemplate messagingTemplate, BotService botService) {
+    public WebSocketEvents(MatchService matchService, SimpMessagingTemplate messagingTemplate) {
         this.matchService      = matchService;
         this.messagingTemplate = messagingTemplate;
-        this.botService = botService;
     }
 
     @EventListener
@@ -33,20 +30,7 @@ public class WebSocketEvents {
         matchService.handleDisconnect(sessionId).ifPresent(partnerId -> {
             messagingTemplate.convertAndSend("/topic/match/" + partnerId, new MatchEvent("PARTNER_LEFT", roomId));
             matchService.requestMatch(partnerId)
-                    .ifPresentOrElse(this::notifyMatched,
-                            () -> assignBotIfEnabled(partnerId));
-        });
-    }
-
-    private void assignBotIfEnabled(String sessionId) {
-        if (!botService.isEnabled()) return;
-        matchService.assignBotRoom(sessionId).ifPresent(roomId -> {
-            MatchEvent event = new MatchEvent("MATCHED", roomId);
-            messagingTemplate.convertAndSend("/topic/match/" + sessionId, event);
-            messagingTemplate.convertAndSend(
-                    "/topic/room/" + roomId,
-                    new SystemEvent("SYSTEM", "Match found. Say hi!")
-            );
+                    .ifPresent(this::notifyMatched);
         });
     }
 

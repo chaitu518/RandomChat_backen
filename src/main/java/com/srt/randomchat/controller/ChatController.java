@@ -51,8 +51,7 @@ public class ChatController {
         String anonymousId = matchService.register(sessionId, request.gender(), request.preference());
         messagingTemplate.convertAndSend("/topic/system/" + sessionId, new SystemEvent("IDENTITY", anonymousId));
         matchService.requestMatch(sessionId)
-                .ifPresentOrElse(this::notifyMatched,
-                        () -> assignBotIfEnabled(sessionId));
+                .ifPresent(this::notifyMatched);
     }
 
     @MessageMapping("/message")
@@ -111,25 +110,11 @@ public class ChatController {
         matchService.leaveRoom(sessionId).ifPresent(partnerId -> {
             messagingTemplate.convertAndSend("/topic/match/" + partnerId, new MatchEvent("PARTNER_LEFT", roomId));
             matchService.requestMatch(partnerId)
-                    .ifPresentOrElse(this::notifyMatched,
-                            () -> assignBotIfEnabled(partnerId));
+                    .ifPresent(this::notifyMatched);
         });
 
         matchService.requestMatch(sessionId)
-                .ifPresentOrElse(this::notifyMatched,
-                        () -> assignBotIfEnabled(sessionId));
-    }
-
-    private void assignBotIfEnabled(String sessionId) {
-        if (!botService.isEnabled()) return;
-        matchService.assignBotRoom(sessionId).ifPresent(roomId -> {
-            MatchEvent event = new MatchEvent("MATCHED", roomId);
-            messagingTemplate.convertAndSend("/topic/match/" + sessionId, event);
-            messagingTemplate.convertAndSend(
-                    "/topic/room/" + roomId,
-                    new SystemEvent("SYSTEM", "Match found. Say hi!")
-            );
-        });
+                .ifPresent(this::notifyMatched);
     }
 
     private void sendError(String sessionId, String message) {
