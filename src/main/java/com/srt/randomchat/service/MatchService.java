@@ -34,6 +34,7 @@ public class MatchService {
     private final Map<String, String>      roomBySession = new ConcurrentHashMap<>();
     private final Map<String, Room>        rooms       = new ConcurrentHashMap<>();
     private final Map<String, String>      botRoomBySession = new ConcurrentHashMap<>();
+    private final java.util.Set<String>    connectedSessions = ConcurrentHashMap.newKeySet();
 
     public synchronized String register(String sessionId, Gender gender, Preference preference) {
         UserProfile existing = profiles.get(sessionId);
@@ -112,10 +113,23 @@ public class MatchService {
 
     public synchronized Optional<String> handleDisconnect(String sessionId) {
         waiting.remove(sessionId);
+        connectedSessions.remove(sessionId);
         Optional<String> partnerId = leaveRoom(sessionId);
         profiles.remove(sessionId);
         botRoomBySession.remove(sessionId);
         return partnerId;
+    }
+
+    public synchronized void registerConnected(String sessionId) {
+        connectedSessions.add(sessionId);
+    }
+
+    public synchronized void removeConnected(String sessionId) {
+        connectedSessions.remove(sessionId);
+    }
+
+    public synchronized int getConnectedCount() {
+        return connectedSessions.size();
     }
 
     public synchronized void cancelSearch(String sessionId) {

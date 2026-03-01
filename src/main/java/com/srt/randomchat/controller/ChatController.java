@@ -133,6 +133,12 @@ public class ChatController {
         );
     }
 
+    @MessageMapping("/online-count")
+    public void onlineCount() {
+        int count = matchService.getConnectedCount();
+        messagingTemplate.convertAndSend("/topic/online-count", count);
+    }
+
     private void sendError(String sessionId, String message) {
         messagingTemplate.convertAndSend("/topic/system/" + sessionId, new SystemEvent("ERROR", message));
     }

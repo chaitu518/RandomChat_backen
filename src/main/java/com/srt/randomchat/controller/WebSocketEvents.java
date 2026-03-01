@@ -8,6 +8,7 @@ import com.srt.randomchat.service.MatchService;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.web.socket.messaging.SessionConnectEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
 @Component
@@ -22,6 +23,14 @@ public class WebSocketEvents {
     }
 
     @EventListener
+    public void onConnect(SessionConnectEvent event) {
+        String sessionId = event.getMessage().getHeaders().get("simpSessionId", String.class);
+        if (sessionId == null) return;
+        matchService.registerConnected(sessionId);
+        broadcastOnlineCount();
+    }
+
+    @EventListener
     public void onDisconnect(SessionDisconnectEvent event) {
         String sessionId = event.getSessionId();
         if (sessionId == null) return;
@@ -32,6 +41,11 @@ public class WebSocketEvents {
             matchService.requestMatch(partnerId)
                     .ifPresent(this::notifyMatched);
         });
+        broadcastOnlineCount();
+    }
+
+    private void broadcastOnlineCount() {
+        messagingTemplate.convertAndSend("/topic/online-count", matchService.getConnectedCount());
     }
 
     private void notifyMatched(MatchOutcome outcome) {
