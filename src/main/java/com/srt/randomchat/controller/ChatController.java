@@ -108,13 +108,29 @@ public class ChatController {
 
         String roomId = matchService.getRoom(sessionId).orElse(null);
         matchService.leaveRoom(sessionId).ifPresent(partnerId -> {
-            messagingTemplate.convertAndSend("/topic/match/" + partnerId, new MatchEvent("PARTNER_LEFT", roomId));
+            messagingTemplate.convertAndSend("/topic/match/" + partnerId, new MatchEvent("PARTNER_NEXT", roomId));
             matchService.requestMatch(partnerId)
                     .ifPresent(this::notifyMatched);
         });
 
         matchService.requestMatch(sessionId)
                 .ifPresent(this::notifyMatched);
+    }
+
+    @MessageMapping("/leave")
+    public void leave(SimpMessageHeaderAccessor headerAccessor) {
+        String sessionId = headerAccessor.getSessionId();
+        if (sessionId == null) return;
+        if (!matchService.isRegistered(sessionId)) {
+            sendError(sessionId, "Join first before leaving.");
+            return;
+        }
+
+        matchService.cancelSearch(sessionId);
+        String roomId = matchService.getRoom(sessionId).orElse(null);
+        matchService.leaveRoom(sessionId).ifPresent(partnerId ->
+                messagingTemplate.convertAndSend("/topic/match/" + partnerId, new MatchEvent("PARTNER_LEFT", roomId))
+        );
     }
 
     private void sendError(String sessionId, String message) {

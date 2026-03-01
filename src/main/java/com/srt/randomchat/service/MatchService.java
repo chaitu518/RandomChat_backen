@@ -118,6 +118,10 @@ public class MatchService {
         return partnerId;
     }
 
+    public synchronized void cancelSearch(String sessionId) {
+        waiting.remove(sessionId);
+    }
+
     public synchronized Optional<String> getAnonymousId(String sessionId) {
         UserProfile profile = profiles.get(sessionId);
         return profile == null ? Optional.empty() : Optional.of(profile.anonymousId());
